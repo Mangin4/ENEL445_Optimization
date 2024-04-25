@@ -73,6 +73,10 @@ feature_y = np.arange(0, 40, 1)
 
 contour = plt.contourf(X, Y, theta, locator=ticker.LogLocator()) 
 
-plt.colorbar(contour, label='Z-values')
+plt.colorbar(contour, label='log(theta-values)')
+
+plt.xlabel("Longitude (Degrees)")
+plt.ylabel("Latitude (Degrees)")
+plt.title("FDOA plot")
 
 plt.show()
