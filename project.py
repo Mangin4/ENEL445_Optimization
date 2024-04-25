@@ -20,7 +20,7 @@ Qinv = np.array([[ 0.75, -0.25, -0.25],
             [-0.25, -0.25, 0.75]])
 
 #data matrix
-theta = np.empty(shape = (40, 40)) 
+theta = np.empty(shape = (160, 160)) 
 
 #satalites
 s1 = np.array([[7378.1, 0, 0]]).T
@@ -48,30 +48,30 @@ def ECEF_to_LLA(lat, long):
 #grid search doppler shift
 def dopler_shift(lat, long):
     u = ECEF_to_LLA(lat, long)
-    f0 = 1/wl*((u - s1).T @ s1d)/(np.linalg.norm(u-s1))
-    f1 = 1/wl*((u - s2).T @ s2d)/(np.linalg.norm(u-s2)) - f0
-    f2 = 1/wl*((u - s3).T @ s3d)/(np.linalg.norm(u-s3)) - f0
-    f3 = 1/wl*((u - s4).T @ s4d)/(np.linalg.norm(u-s4)) - f0 
+    f0 = 1/wl*np.dot((u - s1).T , s1d)/(np.linalg.norm(u-s1))
+    f1 = 1/wl*np.dot((u - s2).T , s2d)/(np.linalg.norm(u-s2)) - f0
+    f2 = 1/wl*np.dot((u - s3).T , s3d)/(np.linalg.norm(u-s3)) - f0
+    f3 = 1/wl*np.dot((u - s4).T , s4d)/(np.linalg.norm(u-s4)) - f0 
     f = np.array([f1[0], f2[0], f3[0]])
     return f
 
 #grid search calc
 f = dopler_shift(5, 10)
-for i in range(0, 40):
-    for j in range(0, 40):
+for i in range(0, 160):
+    for j in range(0, 160):
         g = dopler_shift(lat, long)
-        theta[j][i] = (f-g).T @ Qinv @ (f-g)
-        lat += 1
+        theta[j][i] = np.log((f - g).T @ Qinv @ (f - g))
+        lat += 0.25
     lat = 0
-    long += 1
+    long += 0.25
 
 #plotting stuff
-feature_x = np.arange(0, 40, 1) 
-feature_y = np.arange(0, 40, 1) 
+feature_x = np.arange(0, 40, 0.25) 
+feature_y = np.arange(0, 40, 0.25) 
 
 [X, Y] = np.meshgrid(feature_x, feature_y)
 
-contour = plt.contourf(X, Y, theta, locator=ticker.LogLocator()) 
+contour = plt.contourf(X, Y, theta) 
 
 plt.colorbar(contour, label='log(theta-values)')
 
