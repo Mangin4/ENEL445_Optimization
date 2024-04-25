@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import ticker
 
 #frequency of transmitter
 fs = 1*10**9
@@ -10,21 +11,16 @@ wl = (3*10**8)/fs
 long = 0
 lat  = 0
 
-#set location in ECEF
-G = np.array([[6257.495860574267],
- [ 1103.3653518907781],
- [552.1839593406222]])
+Q = np.array([[2, 1, 1],
+            [1, 2, 1],
+            [1, 1, 2]])
 
-Q = 1**2*np.array([[2, 1, 1],
-             [1, 2, 1],
-             [1, 1, 2]])
-
-Qinv = 1**2 * np.array([[ 0.75, -0.25, -0.25],
-                [-0.25,  0.75, -0.25],
-                [-0.25, -0.25, 0.75]])
+Qinv = np.array([[ 0.75, -0.25, -0.25],
+            [-0.25,  0.75, -0.25],
+            [-0.25, -0.25, 0.75]])
 
 #data matrix
-theta = np.empty(shape = (41, 41)) 
+theta = np.empty(shape = (40, 40)) 
 
 #satalites
 s1 = np.array([[7378.1, 0, 0]]).T
@@ -46,48 +42,36 @@ def ECEF_to_LLA(lat, long):
     x = (Re*np.cos(lat)*np.cos(long))
     y = (Re*np.cos(lat)*np.sin(long))
     z = ((1-e**2)*Re*np.sin(lat))
-    return x, y, z
-
-#transmitter doppler shift
-def Transmitter(G):
-    Gf0 = 1/wl*((G - s1).T @ s1d)/(np.linalg.norm(G-s1))
-    g1 = 1/wl*((G - s2).T @ s2d)/(np.linalg.norm(G-s2)) - Gf0
-    g2 = 1/wl*((G - s3).T @ s3d)/(np.linalg.norm(G-s3)) - Gf0
-    g3 = 1/wl*((G - s4).T @ s4d)/(np.linalg.norm(G-s4)) - Gf0
-    return np.array([g1[0], g2[0], g3[0]])
+    u = np.array([[x], [y], [z]])
+    return u
 
 #grid search doppler shift
-def dopler_shift(u):
+def dopler_shift(lat, long):
+    u = ECEF_to_LLA(lat, long)
     f0 = 1/wl*((u - s1).T @ s1d)/(np.linalg.norm(u-s1))
     f1 = 1/wl*((u - s2).T @ s2d)/(np.linalg.norm(u-s2)) - f0
     f2 = 1/wl*((u - s3).T @ s3d)/(np.linalg.norm(u-s3)) - f0
     f3 = 1/wl*((u - s4).T @ s4d)/(np.linalg.norm(u-s4)) - f0 
-    return np.array([f1[0], f2[0], f3[0]])
+    f = np.array([f1[0], f2[0], f3[0]])
+    return f
 
 #grid search calc
-g = Transmitter(G)
-for i in range(0, 41):
-    for j in range(0, 41):
-        u = np.array(ECEF_to_LLA(lat, long)).T
-        f = dopler_shift(u)
-        theta[j][i] = ((f - g).T @ Qinv @ (f - g))
-        if i <= 5 and j<=10:
-            print(lat, long)
-            print((f-g).T@(f-g))
-            print(theta[j][i])
-        long += 1
-    long = 0
-    lat += 1
-
-#print(np.min(theta))
+f = dopler_shift(5, 10)
+for i in range(0, 40):
+    for j in range(0, 40):
+        g = dopler_shift(lat, long)
+        theta[j][i] = (f-g).T @ Qinv @ (f-g)
+        lat += 1
+    lat = 0
+    long += 1
 
 #plotting stuff
-feature_x = np.arange(0, 41, 1) 
-feature_y = np.arange(0, 41, 1) 
+feature_x = np.arange(0, 40, 1) 
+feature_y = np.arange(0, 40, 1) 
 
 [X, Y] = np.meshgrid(feature_x, feature_y)
 
-contour = plt.contourf(X, Y, theta) 
+contour = plt.contourf(X, Y, theta, locator=ticker.LogLocator()) 
 
 plt.colorbar(contour, label='Z-values')
 
