@@ -1,30 +1,30 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import ticker
 import random
 
-#frequency of transmitter
-fs = 1*10**9
-#wave length 
-wl = (3*10**8)/fs
 
+fs = 1*10**9      #frequency of transmitter
+wl = (3*10**5)/fs #wave length 
+
+#source location
 u0 = np.array([[5], [10], [0]])
 
+#Data matrix
+theta = np.empty(shape = (401, 401)) 
+
+#Weighting function
 Q = np.array([[2, 1, 1],
             [1, 2, 1],
             [1, 1, 2]])
 
 Qinv = np.linalg.inv(Q)
 
-n1 = random.gauss(0, 1)
-n2 = random.gauss(0, 1)
-n3 = random.gauss(0, 1)
-n4 = random.gauss(0, 1)
-
+#making the noise vector
+n1 = random.gauss(0, 16)
+n2 = random.gauss(0, 16)
+n3 = random.gauss(0, 16)
+n4 = random.gauss(0, 16)
 nf = np.array([[n2-n1], [n3-n1], [n4-n1]])
-
-#data matrix
-theta = np.empty(shape = (161, 161)) 
 
 #satalites
 s1 = np.array([[7378.1, 0, 0]]).T
@@ -37,7 +37,7 @@ s4 = np.array([[7377.5, 0, 100]]).T
 s4d = np.array([[-0.0777, 4.0150, 5.7335]]).T
 
 #Should convert from ECEF to LLA
-def ECEF_to_LLA(lat, long):
+def LLA_to_ECEF(lat, long):
     R0 = 6378.137
     e = 0.081819198425
     lat = np.radians(lat)
@@ -51,7 +51,7 @@ def ECEF_to_LLA(lat, long):
 
 #grid search doppler shift
 def dopler_shift(lat, long):
-    u = ECEF_to_LLA(lat, long)
+    u = LLA_to_ECEF(lat, long)
     f0 = 1/wl*np.dot((u - s1).T , s1d)/(np.linalg.norm(u-s1))
     f1 = 1/wl*np.dot((u - s2).T , s2d)/(np.linalg.norm(u-s2)) - f0
     f2 = 1/wl*np.dot((u - s3).T , s3d)/(np.linalg.norm(u-s3)) - f0
@@ -67,38 +67,46 @@ def grid_search():
     coord = 0
 
     f = dopler_shift(5, 10)
-    for i in range(0, 161):
-        for j in range(0, 161):
+    for i in range(0, 401):
+        for j in range(0, 401):
             g = dopler_shift(lat, long)
             g += nf
             theta[j][i] = np.log((f - g).T @ Qinv @ (f - g))
+
             if theta[j][i] < min: #grid search stuff
                 min = theta[j][i]
-                coord = np.array([[j], [i], [0]])*0.25
-            lat += 0.25
+                coord = np.array([[j], [i], [0]])*0.1
+            lat += 0.1
+            lat = round(lat, 1)
         lat = 0
-        long += 0.25
+        long += 0.1
+        long = round(long, 1)
+
     return coord, min
 
 #monte carlo simulation to find the accuracy of the data
 def monte_carlo():
     sumation = 0
-    for l in range(0, 30):
+    L = 30
+    for l in range(0, L):
         coord, min = grid_search()
         sumation += np.linalg.norm(coord - u0)**2
         
-    RMSE = np.sqrt((1/30)*sumation)
+    RMSE = np.sqrt((1/L)*sumation)
     print(RMSE)
 
 #plotting stuff
 def graph():
     coord, min = grid_search()
-    feature_x = np.arange(0, 40.25, 0.25) 
-    feature_y = np.arange(0, 40.25, 0.25) 
+    tmin = np.min(theta)
+    tmax = np.max(theta)
+    levels = np.linspace(tmin, tmax, 100)
+    feature_x = np.arange(0, 40.1, 0.1) 
+    feature_y = np.arange(0, 40.1, 0.1) 
 
     [X, Y] = np.meshgrid(feature_x, feature_y)
 
-    contour = plt.contourf(X, Y, theta) 
+    contour = plt.contourf(X, Y, theta, levels = levels) 
 
     plt.colorbar(contour, label='log(theta-values)')
 
@@ -106,10 +114,12 @@ def graph():
     plt.ylabel("Latitude (Degrees)")
     plt.title("FDOA plot")
     print("Minmum is found at: ", coord.T)
+    plt.annotate('Min',xy=(10,5),xytext=(5,10),arrowprops={})
+    
     plt.show()
 
 def main():
-    monte_carlo()
+    #monte_carlo()
     graph()
 
 main()
