@@ -5,8 +5,8 @@ import time
 
 fs = 1*10**9      #frequency of transmitter
 wl = (3*10**5)/fs #wave length 
-nVals = 4001
-step = 0.01
+nVals = 401
+step = 0.1
 
 #source location
 u0 = np.array([[5], [10], [0]])
@@ -114,8 +114,8 @@ def graph():
     tmin = np.min(theta)
     tmax = np.max(theta)
     levels = np.linspace(tmin, tmax, 100)
-    feature_x = np.arange(0, 40.01, 0.01) 
-    feature_y = np.arange(0, 40.01, 0.01) 
+    feature_x = np.arange(0, 40+step, step) 
+    feature_y = np.arange(0, 40+step, step) 
 
     [X, Y] = np.meshgrid(feature_x, feature_y)
 
