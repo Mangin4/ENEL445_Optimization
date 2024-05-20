@@ -6,8 +6,9 @@ import time
 
 MAX_LAT = 40
 MAX_LONG = 40
-lat_axis = np.linspace(0, MAX_LAT, MAX_LAT + 1)
-long_axis = np.linspace(0, MAX_LONG, MAX_LONG + 1)
+
+lat_axis = np.linspace(0, MAX_LAT, 41)
+long_axis = np.linspace(0, MAX_LONG, 41)
 
 R0 = 6378.137 # Earth's radius
 e = 0.081819198425 # Earth's eccentricity
@@ -33,8 +34,6 @@ s3 = np.array([[7377.5, -100, 0]]).T
 s3d = np.array([[0.0610, 4.4991, 5.3623]]).T
 s4 = np.array([[7377.5, 0, 100]]).T
 s4d = np.array([[-0.0777, 4.0150, 5.7335]]).T
-
-
 
 def convert(p):
     B = p[0, 0]
@@ -66,14 +65,19 @@ dummy = np.array([[5], [10], [0]])
 
 
 def gridSearch():
-    theta = np.empty(shape = (MAX_LAT+1, MAX_LONG+1)) 
+    lat = 0
+    long  = 0
+
+    theta = np.empty(shape = (41, 41)) 
     f = getVec(p_source)
     for i in long_axis:
         for j in lat_axis:
-            p_next = np.array([[j], [i], [0]])
+            p_next = np.array([[lat], [long], [0]])
             g = getVec(p_next)
             theta[int(j)][int(i)] = np.log((f-g).T @ Qinv @ (f-g))[0, 0] # TODO THIS IS LOGGED BUT ITS WEIRD AT < 1 BECAUSE WILL BE NEGATIVE
-
+            lat += 0.5
+        lat = 0
+        long += 0.5
             # WAS USING THIS TO TEST POINT 35, 35 long lat
             # if (j == 35 and i ==35):
             #     print(f"\nf: {f}")
