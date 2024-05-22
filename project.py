@@ -135,17 +135,41 @@ def graph():
 def new_x(a, xc, xn):
     return xc + a*(xc-xn)
     
+
+def finite_diff(starting_pos, step_size, direction, wavelength):
+    u = starting_pos #LLA_to_ECEF(starting_pos[0], starting_pos[1])
+    h = step_size
+    e = direction.T
+    w = wavelength
+
+    deriv = ((1/w*((u + h*e - s2).T @ s2d)/(np.linalg.norm(u + h*e - s2)) - 1/w*((u + h*e - s1).T @ s1d)/(np.linalg.norm(u + h*e - s1))) 
+    - (1/w*((u - s2).T @ s2d)/(np.linalg.norm(u-s2)) - 1/w*((u - s1).T @ s1d)/(np.linalg.norm(u-s1))))/h
+
+    return deriv[0][0]
+
+
+
+
 def main():
-    start = time.time()
-    map_gen()
+    #start = time.time()
+    #map_gen()
     #grid_search()
     #monte_carlo()
-    graph()
+    #graph()
     #triang_thing()
-    # u = LLA_to_ECEF(5, 10)
-    # print(1/wl*(((s2d)/(np.linalg.norm(u-s2))**(1/2))-(((u-s2).T @ s2d)*(u-s2))/(2*(np.linalg.norm(u-s2))**3))
-    #       -(1/wl*(((s1d)/(np.linalg.norm(u-s1))**(1/2))-(((u-s1).T @ s1d)*(u-s1))/(2*(np.linalg.norm(u-s1))**3))))
-    end = time.time()
-    timer = end - start
-    print(timer/60)
+    u = LLA_to_ECEF(5, 10)
+    print(1/wl*(((s2d)/(np.linalg.norm(u-s2)))-(((u-s2).T @ s2d)*(u-s2))/((np.linalg.norm(u-s2))**3))
+           -(1/wl*(((s1d)/(np.linalg.norm(u-s1)))-(((u-s1).T @ s1d)*(u-s1))/((np.linalg.norm(u-s1))**3))))
+    #end = time.time()
+    #timer = end - start
+    #print(timer/60)
+
+    # Gradient Approximation
+    B_deriv = finite_diff(u, 1, np.array([[1, 0, 0]]), wl)
+    L_deriv = finite_diff(u, 1, np.array([[0, 1, 0]]), wl)
+    H_deriv = finite_diff(u, 1, np.array([[0, 0, 1]]), wl)
+    res = np.array([B_deriv, L_deriv, H_deriv]).T
+    print(res)
+
+    
 main()  
