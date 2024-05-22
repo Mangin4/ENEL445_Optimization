@@ -39,6 +39,11 @@ s2d = np.array([[-0.0671, 4.9493, 4.9497]]).T
 s3d = np.array([[0.0610, 4.4991, 5.3623]]).T
 s4d = np.array([[-0.0777, 4.0150, 5.7335]]).T
 
+def gradient(u):
+    derivitive = 1/wl*(((s2d)/(np.linalg.norm(u-s2)))-(((u-s2).T @ s2d)*(u-s2))/((np.linalg.norm(u-s2))**3))
+    -(1/wl*(((s1d)/(np.linalg.norm(u-s1)))-(((u-s1).T @ s1d)*(u-s1))/((np.linalg.norm(u-s1))**3)))
+    return derivitive
+
 #Should convert from ECEF to LLA
 def LLA_to_ECEF(lat, long):
     R0 = 6378.137
@@ -51,6 +56,36 @@ def LLA_to_ECEF(lat, long):
     z = ((1-e**2)*Re*np.sin(lat))
     u = np.array([[x], [y], [z]])
     return u
+
+def ECEF_to_LLA(x, y, z):
+    a = 6378.1370 #km
+    b = 6356.752314245 #km
+
+    f = (a - b) / a
+    f_inv = 1.0 / f
+
+    e_sq = f * (2 - f)                       
+    eps = e_sq / (1.0 - e_sq)
+
+    p = np.sqrt(x * x + y * y)
+    q = np.arctan2((z * a), (p * b))
+
+    sin_q = np.sin(q)
+    cos_q = np.cos(q)
+
+    sin_q_3 = sin_q * sin_q * sin_q
+    cos_q_3 = cos_q * cos_q * cos_q
+
+    phi = np.arctan2((z + eps * b * sin_q_3), (p - e_sq * a * cos_q_3))
+    lam = np.arctan2(y, x)
+
+    v = a / np.sqrt(1.0 - e_sq * np.sin(phi) * np.sin(phi))
+    h   = (p / np.cos(phi)) - v
+
+    lat = np.degrees(phi)
+    lon = np.degrees(lam)
+
+    print(lat,lon,h)
 
 #grid search doppler shift
 def dopler_shift(lat, long, w):
@@ -76,7 +111,6 @@ def map_gen():
     long = 0
     lat  = 0
     freq = get_f(5, 10)
-    print(freq)
     w = (3*10**5)/freq
     f = dopler_shift(5, 10, w)
     for i in range(0, nVals):
@@ -131,9 +165,6 @@ def graph():
     #plt.annotate('Min',xy=(10,5),xytext=(5,10),arrowprops={})
     
     plt.show()
-
-def new_x(a, xc, xn):
-    return xc + a*(xc-xn)
     
 
 def finite_diff(starting_pos, step_size, direction, wavelength):
@@ -148,28 +179,65 @@ def finite_diff(starting_pos, step_size, direction, wavelength):
     return deriv[0][0]
 
 
+def find():
+    tol = 0.1
+    pgrad = [0,0,0]
+    grad = 0
+    k = 0
+    ppk = 0
+    pk = 0
+    bk = 0
+    ak = 500
+    pak = 0
+    x = np.array([[6067.8,1625.9,1100.2]]).T
+
+    grad = gradient(x)
+    #np.linalg.norm(grad, ord = np.inf) > tol
+    
+    while k< 10:
+        grad = gradient(x)
+        ECEF_to_LLA(x[0], x[1], x[2])
+        if k % 2 or k == 0:
+            pk = -((grad)/np.linalg.norm(grad))
+        else:
+            bk = (np.dot(grad.T,grad)/np.dot(pgrad.T,pgrad))
+            pk = -(grad)/np.linalg.norm(grad) + bk*ppk
+        if k > 0:
+            ak = pak*(np.dot(pgrad.T,ppk)/np.dot(grad.T,pk))
+        x = x + ak*pk
+        pgrad = np.linalg.norm(grad)
+        ppk = pk
+        pak = ak
+        print(f"ppk {(ppk)}")
+        print(f"pk {(pk)}")
+        print(f"ak {(ak)}")
+        print(f"bk {(bk)}")
+        k += 1
+    
+    print(ECEF_to_LLA(x[0], x[1], x[2]))
 
 
 def main():
     #start = time.time()
-    #map_gen()
+    map_gen()
+    find()
     #grid_search()
     #monte_carlo()
     #graph()
     #triang_thing()
-    u = LLA_to_ECEF(5, 10)
-    print(1/wl*(((s2d)/(np.linalg.norm(u-s2)))-(((u-s2).T @ s2d)*(u-s2))/((np.linalg.norm(u-s2))**3))
-           -(1/wl*(((s1d)/(np.linalg.norm(u-s1)))-(((u-s1).T @ s1d)*(u-s1))/((np.linalg.norm(u-s1))**3))))
+    # u = LLA_to_ECEF(5, 10)
+    # print(1/wl*(((s2d)/(np.linalg.norm(u-s2)))-(((u-s2).T @ s2d)*(u-s2))/((np.linalg.norm(u-s2))**3))
+    #        -(1/wl*(((s1d)/(np.linalg.norm(u-s1)))-(((u-s1).T @ s1d)*(u-s1))/((np.linalg.norm(u-s1))**3))))
     #end = time.time()
     #timer = end - start
     #print(timer/60)
 
     # Gradient Approximation
-    B_deriv = finite_diff(u, 1, np.array([[1, 0, 0]]), wl)
-    L_deriv = finite_diff(u, 1, np.array([[0, 1, 0]]), wl)
-    H_deriv = finite_diff(u, 1, np.array([[0, 0, 1]]), wl)
-    res = np.array([B_deriv, L_deriv, H_deriv]).T
-    print(res)
+    # B_deriv = finite_diff(u, 1, np.array([[1, 0, 0]]), wl)
+    # L_deriv = finite_diff(u, 1, np.array([[0, 1, 0]]), wl)
+    # H_deriv = finite_diff(u, 1, np.array([[0, 0, 1]]), wl)
+    # res = np.array([B_deriv, L_deriv, H_deriv]).T
+    #print(res)
 
     
 main()  
