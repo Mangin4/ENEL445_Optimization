@@ -53,35 +53,36 @@ def LLA_to_ECEF(lat, long):
     return u
 
 #grid search doppler shift
-def dopler_shift(lat, long):
+def dopler_shift(lat, long, w):
     u = LLA_to_ECEF(lat, long)
-    f0 = 1/wl*((u - s1).T @ s1d)/(np.linalg.norm(u-s1))
-    f1 = 1/wl*((u - s2).T @ s2d)/(np.linalg.norm(u-s2)) - f0
-    f2 = 1/wl*((u - s3).T @ s3d)/(np.linalg.norm(u-s3)) - f0
-    f3 = 1/wl*((u - s4).T @ s4d)/(np.linalg.norm(u-s4)) - f0 
+    f0 = 1/w*((u - s1).T @ s1d)/(np.linalg.norm(u-s1))
+    f1 = 1/w*((u - s2).T @ s2d)/(np.linalg.norm(u-s2)) - f0
+    f2 = 1/w*((u - s3).T @ s3d)/(np.linalg.norm(u-s3)) - f0
+    f3 = 1/w*((u - s4).T @ s4d)/(np.linalg.norm(u-s4)) - f0 
     f = np.array([f1[0], f2[0], f3[0]])
     return f
 
-# def get_f(lat, long):
-#     u = LLA_to_ECEF(lat, long)
-#     f0 = ((u - s1).T @ s1d)/(np.linalg.norm(u-s1))
-#     f1 = ((u - s2).T @ s2d)/(np.linalg.norm(u-s2))
-#     f2 = ((u - s3).T @ s3d)/(np.linalg.norm(u-s3))
-#     f3 = ((u - s4).T @ s4d)/(np.linalg.norm(u-s4))
-#     fs = (f0+f1+f2+f3)/4
-#     return fs
+def get_f(lat, long):
+    u = LLA_to_ECEF(lat, long)
+    f0 = ((u - s1).T @ s1d)/(np.linalg.norm(u-s1))
+    f1 = ((u - s2).T @ s2d)/(np.linalg.norm(u-s2))
+    f2 = ((u - s3).T @ s3d)/(np.linalg.norm(u-s3)) 
+    f3 = ((u - s4).T @ s4d)/(np.linalg.norm(u-s4))
+    fs = (f0+f1+f2+f3)/4
+    return fs
 
 #grid search calc
 def map_gen():
     long = 0
     lat  = 0
-
-    f = dopler_shift(5, 10)
-    #get_f(5, 10)
+    freq = get_f(5, 10)
+    print(freq)
+    w = (3*10**5)/freq
+    f = dopler_shift(5, 10, w)
     for i in range(0, nVals):
         for j in range(0, nVals):
-            g = dopler_shift(lat, long)
-            g += nf
+            g = dopler_shift(lat, long, w)
+            #g += nf
             theta[j][i] = np.log((f - g).T @ Qinv @ (f - g))
             lat += step
         lat = 0
@@ -95,7 +96,7 @@ def grid_search():
             if theta[j][i] < min: #grid search stuff
                 min = theta[j][i]
                 coord = np.array([[j], [i], [0]])*0.1
-    print( coord, min)
+    print(coord, min)
 
 #monte carlo simulation to find the accuracy of the data
 def monte_carlo():
@@ -141,9 +142,9 @@ def main():
     #monte_carlo()
     graph()
     #triang_thing()
-    u = LLA_to_ECEF(5, 10)
-    print(1/wl*(((s2d)/(np.linalg.norm(u-s2))**(1/2))-(((u-s2).T @ s2d)*(u-s2))/(2*(np.linalg.norm(u-s2))**3))
-          -(1/wl*(((s1d)/(np.linalg.norm(u-s1))**(1/2))-(((u-s1).T @ s1d)*(u-s1))/(2*(np.linalg.norm(u-s1))**3))))
+    # u = LLA_to_ECEF(5, 10)
+    # print(1/wl*(((s2d)/(np.linalg.norm(u-s2))**(1/2))-(((u-s2).T @ s2d)*(u-s2))/(2*(np.linalg.norm(u-s2))**3))
+    #       -(1/wl*(((s1d)/(np.linalg.norm(u-s1))**(1/2))-(((u-s1).T @ s1d)*(u-s1))/(2*(np.linalg.norm(u-s1))**3))))
     end = time.time()
     timer = end - start
     print(timer/60)
