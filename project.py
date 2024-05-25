@@ -86,6 +86,8 @@ def ECEF_to_LLA(x, y, z):
     lon = np.degrees(lam)
 
     print(lat,lon,h)
+    result_vec = np.array([[lat, lon, h]]).T
+    return result_vec
 
 #grid search doppler shift
 def dopler_shift(lat, long, w):
@@ -216,11 +218,73 @@ def find():
     
     print(ECEF_to_LLA(x[0], x[1], x[2]))
 
+# Function to compute Jacobian at position u and return 3x3 (includes altitude, H)
+def get_jac(u):
+    
+    f21d = 1/wl*(((s2d)/(np.linalg.norm(u-s2)))-(((u-s2).T @ s2d)*(u-s2))/((np.linalg.norm(u-s2))**3))
+    -(1/wl*(((s1d)/(np.linalg.norm(u-s1)))-(((u-s1).T @ s1d)*(u-s1))/((np.linalg.norm(u-s1))**3)))
+    
+    f31d = 1/wl*(((s3d)/(np.linalg.norm(u-s3)))-(((u-s3).T @ s3d)*(u-s3))/((np.linalg.norm(u-s3))**3))
+    -(1/wl*(((s1d)/(np.linalg.norm(u-s1)))-(((u-s1).T @ s1d)*(u-s1))/((np.linalg.norm(u-s1))**3)))
+    
+    f41d = 1/wl*(((s4d)/(np.linalg.norm(u-s4)))-(((u-s4).T @ s4d)*(u-s4))/((np.linalg.norm(u-s4))**3))
+    -(1/wl*(((s1d)/(np.linalg.norm(u-s1)))-(((u-s1).T @ s1d)*(u-s1))/((np.linalg.norm(u-s1))**3)))
+    
+    a = f21d[:, 0]
+    b = f31d[:, 0]
+    c = f41d[:, 0]
+    jacobian = np.array([a, b, c])
+    return jacobian
 
+# Should be correct new step but is far too large. Eventually H will get large and turn matrix singular.
+def new_step(curr_pos):
+    # [Bnew, Lnew] = (J.T @ J)^(-1) @ (J.T @ g), g = y - f(Bcurr, Lcurr)+J(Bcurr, Lcurr)[Bcurr, Lcurr]
+    # Need this order of operation to get 2x1 result
+
+    u = curr_pos # Set current position - use this for function arguments (has all 3 components)
+    #u_2x1 = np.array([curr_pos[0], curr_pos[1]]) # Use this for the pos vector that is multiplied.
+    B = (curr_pos[0])[0] # Get Longitude
+    L = (curr_pos[1])[0] # Get Lattitude
+    y = dopler_shift(5, 10, wl) # Doppler shift of target (will use estimate here)
+    f = dopler_shift(B, L, wl) # Doppler shift of guess
+    J = get_jac(u) # Get jacobian at current position (uses 3x1 vector in get_jac func)
+    g = (y-f)+J @ u # Compute g used in finding step equation 
+    J_inv = np.linalg.inv(J.T @ J) # Get inverse part of equation for new step
+    u_next = J_inv @ (J.T @ g) # Compute new step
+    return u_next
+
+
+# Not sure if this is how to evaluate the objective function.
+def evaluate(curr_pos):
+    y = dopler_shift(5, 10, wl)
+    f = dopler_shift((curr_pos[0])[0], (curr_pos[1])[0], wl)
+    res = (y-f).T @ (y-f)
+    return res
+
+# Pitiful attempt at implementing shit
+def grad_descent(starting_pos):
+    tol = 500
+    curr_pos = starting_pos
+    res = (evaluate(curr_pos)[0])[0]
+    print(res)
+    print("1") # Numbers used to see where in loop it breaks
+    while (res > tol): # Think this is fine?
+        print("2")
+        new_pos = new_step(curr_pos)
+        new_pos = ECEF_to_LLA((new_pos[0])[0], (new_pos[1])[0], (new_pos[2])[0])
+        print("3")
+        res = evaluate(new_pos)
+        print("4")
+        curr_pos = new_pos
+        print(np.shape(curr_pos))
+        time.sleep(1)
+    print("Converged")
+
+        
 def main():
     #start = time.time()
-    map_gen()
-    find()
+    #map_gen()
+    #find()
     #grid_search()
     #monte_carlo()
     #graph()
@@ -236,8 +300,9 @@ def main():
     # B_deriv = finite_diff(u, 1, np.array([[1, 0, 0]]), wl)
     # L_deriv = finite_diff(u, 1, np.array([[0, 1, 0]]), wl)
     # H_deriv = finite_diff(u, 1, np.array([[0, 0, 1]]), wl)
-    # res = np.array([B_deriv, L_deriv, H_deriv]).T
-    #print(res)
+ 
+    # Test if converges when super close to point (it doesn't). It goes unstable af.
+    start_pos = np.array([[4, 10, 0]]).T
+    grad_descent(start_pos)
 
-    
 main()  
