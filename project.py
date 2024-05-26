@@ -220,7 +220,7 @@ def find():
 
 # Function to compute Jacobian at position u and return 3x3 (includes altitude, H)
 def get_jac(u):
-    
+    u = LLA_to_ECEF((u[0])[0], (u[1])[0])
     f21d = 1/wl*(((s2d)/(np.linalg.norm(u-s2)))-(((u-s2).T @ s2d)*(u-s2))/((np.linalg.norm(u-s2))**3))
     -(1/wl*(((s1d)/(np.linalg.norm(u-s1)))-(((u-s1).T @ s1d)*(u-s1))/((np.linalg.norm(u-s1))**3)))
     
@@ -237,10 +237,10 @@ def get_jac(u):
     return jacobian
 
 # Should be correct new step but is far too large. Eventually H will get large and turn matrix singular.
-def new_step(curr_pos):
+def new_step(curr_pos, step_size):
     # [Bnew, Lnew] = (J.T @ J)^(-1) @ (J.T @ g), g = y - f(Bcurr, Lcurr)+J(Bcurr, Lcurr)[Bcurr, Lcurr]
     # Need this order of operation to get 2x1 result
-
+    mu = step_size
     u = curr_pos # Set current position - use this for function arguments (has all 3 components)
     #u_2x1 = np.array([curr_pos[0], curr_pos[1]]) # Use this for the pos vector that is multiplied.
     B = (curr_pos[0])[0] # Get Longitude
@@ -249,8 +249,9 @@ def new_step(curr_pos):
     f = dopler_shift(B, L, wl) # Doppler shift of guess
     J = get_jac(u) # Get jacobian at current position (uses 3x1 vector in get_jac func)
     g = (y-f)+J @ u # Compute g used in finding step equation 
-    J_inv = np.linalg.inv(J.T @ J) # Get inverse part of equation for new step
-    u_next = J_inv @ (J.T @ g) # Compute new step
+    D = np.diag(np.diag(mu * (J.T @ J)))
+    J_inv = np.linalg.inv(J.T @ J + D) # Get inverse part of equation for new step
+    u_next = -1*(J_inv @ (J.T @ g)) # Compute new step
     return u_next
 
 
@@ -262,25 +263,36 @@ def evaluate(curr_pos):
     return res
 
 # Pitiful attempt at implementing shit
-def grad_descent(starting_pos):
+def levenberg(starting_pos):
     tol = 500
+    step = 0.1
+    k = 0
     curr_pos = starting_pos
-    res = (evaluate(curr_pos)[0])[0]
-    print(res)
-    print("1") # Numbers used to see where in loop it breaks
-    while (res > tol): # Think this is fine?
-        print("2")
-        new_pos = new_step(curr_pos)
+    #res = (evaluate(curr_pos)[0])[0]
+    while (k < 20): # Think this is fine?
+        new_pos = new_step(curr_pos, step)
+        #print(f"New pos {new_pos}")
         new_pos = ECEF_to_LLA((new_pos[0])[0], (new_pos[1])[0], (new_pos[2])[0])
-        print("3")
-        res = evaluate(new_pos)
-        print("4")
+        new_pos = curr_pos - new_pos
+        #res = evaluate(new_pos)
         curr_pos = new_pos
-        print(np.shape(curr_pos))
-        time.sleep(1)
+        print(new_pos)
+        k+=1
+    print(ECEF_to_LLA((new_pos[0])[0], (new_pos[1])[0], (new_pos[2])[0]))
     print("Converged")
 
-        
+def grad_descent(starting_pos):
+    curr_pos = LLA_to_ECEF((starting_pos[0])[0], (starting_pos[1])[0])
+
+    for i in range(0, 20):
+        jac = get_jac(curr_pos)
+        #new_pos = ECEF_to_LLA((new_pos[0])[0], (new_pos[1])[0], (new_pos[2])[0])
+        new_pos = curr_pos - 200 * (jac @ curr_pos)
+        curr_pos = new_pos
+        print(curr_pos)
+    print("CONVERGED")
+    print(ECEF_to_LLA((new_pos[0])[0], (new_pos[1])[0], (new_pos[2])[0]))
+
 def main():
     #start = time.time()
     #map_gen()
@@ -302,7 +314,12 @@ def main():
     # H_deriv = finite_diff(u, 1, np.array([[0, 0, 1]]), wl)
  
     # Test if converges when super close to point (it doesn't). It goes unstable af.
-    start_pos = np.array([[4, 10, 0]]).T
+    start_pos = np.array([[20, 20, 0]]).T
+    #levenberg(start_pos)
     grad_descent(start_pos)
+    # a = new_step(start_pos, 0.01)
+    # print(a)
+    # a = ECEF_to_LLA((a[0])[0], (a[1])[0], (a[2])[0])
+
 
 main()  
