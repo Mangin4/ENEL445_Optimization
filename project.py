@@ -9,9 +9,6 @@ step = 0.1
 R0 = 6378.137
 e = 0.081819198425
 
-#source location
-u0 = np.array([[5], [10]])
-
 #Data matrix
 theta = np.empty(shape = (nVals, nVals))
 
@@ -23,10 +20,10 @@ Q = np.array([[2, 1, 1],
 Qinv = np.linalg.inv(Q)
 
 #making the noise vector
-n1 = random.gauss(0, 1)
-n2 = random.gauss(0, 1)
-n3 = random.gauss(0, 1)
-n4 = random.gauss(0, 1)
+n1 = random.gauss(0, 16)
+n2 = random.gauss(0, 16)
+n3 = random.gauss(0, 16)
+n4 = random.gauss(0, 16)
 nf = np.array([[n2-n1], [n3-n1], [n4-n1]])
 
 #satalites
@@ -51,7 +48,7 @@ def LLA_to_ECEF(lat, long):
     u = np.array([[x], [y], [z]])
     return u
 
-u0 = LLA_to_ECEF(u0[0], u0[1])[:2,0]
+u0 = LLA_to_ECEF(5, 10)[:2,0]
 
 #grid search doppler shift
 def dopler_shift(lat, long, wl):
@@ -144,12 +141,12 @@ def get_jac(x, wl):
     return J, r
 
 def lev():
-    x0 = np.array([[30],[20]])
+    x0 = np.array([[9],[10]])
     fe = get_f(5, 10)/(3*10**5)
     xs = np.empty(shape = (0))
     ys = np.empty(shape = (0))
     flag = 0
-    mu0 = 0.01
+    mu0 = 0.1
     ro = 2
     k = 0
     x = x0
@@ -163,8 +160,9 @@ def lev():
     
     while abs(delta) > tol:
         s = np.linalg.inv(j.T@Qinv@j+mu*np.diag(np.diag(j.T@Qinv@j)))@j.T@Qinv@r
+        if k < 2:
+            s /=2
         js, rs = get_jac(x+s, fe)
-        print(s)
         es = (np.linalg.norm(rs))**2
         delta = es-e
         if delta < 0:
@@ -182,8 +180,8 @@ def lev():
         k+=1
     if flag:
         print("not converged")
-    else:
-        print(x, k)
+    # else:
+    #     print(x, k)
     return x[:2,0], xs, ys
 
 #plotting stuff
@@ -212,21 +210,22 @@ def graph(xs, ys):
 #monte carlo simulation to find the accuracy of the data
 def monte_carlo():
     sumation = 0
-    L = 500
+    L = 10**4
     for l in range(0, L):
         #val, min = map_gen()
-        val = lev()
-        val = LLA_to_ECEF(val[1], val[2])[:2,0]
+        val, xs, ys = lev()
+        print(val[1])
+        val = LLA_to_ECEF(val[0], val[1])[:2,0]
         sumation += np.linalg.norm(val - u0)**2
         
     RMSE = np.sqrt((1/L)*sumation)
     print(RMSE)
 
 def main():
-    map_gen()
-    val, xs, ys = lev()
-    #monte_carlo()
-    graph(xs, ys)
+    #map_gen()
+    #val, xs, ys = lev()
+    monte_carlo()
+    #graph(xs, ys)
 
     # Gradient Approximation
     #B_deriv = finite_diff(u, 1, np.array([[1, 0, 0]]), wl)
