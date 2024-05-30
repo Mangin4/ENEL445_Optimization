@@ -95,10 +95,19 @@ def finite_diff(starting_pos, step_size, direction, wavelength):
     h = step_size
     e = direction.T
     w = wavelength
-
     deriv = ((1/w*((u + h*e - s2).T @ s2d)/(np.linalg.norm(u + h*e - s2)) - 1/w*((u + h*e - s1).T @ s1d)/(np.linalg.norm(u + h*e - s1))) 
     - (1/w*((u - s2).T @ s2d)/(np.linalg.norm(u-s2)) - 1/w*((u - s1).T @ s1d)/(np.linalg.norm(u-s1))))/h
 
+    return deriv[0][0]
+
+
+def complex_step(pos, step_size, direction, w):
+    # w is estimated source wavelength
+    h = step_size # Set to 10^(-200)
+    e = direction.T
+    u = pos + 1j*h*e # Perturb function with complex step increment
+    u = np.array(u, dtype=complex)
+    deriv = (np.imag(1/w*((u - s2).T @ s2d)/(np.linalg.norm(u - s2)) - 1/w*((u - s1).T @ s1d)/(np.linalg.norm(u - s1))))/h 
     return deriv[0][0]
 
 def pos_jac(lat, lon):
@@ -224,12 +233,42 @@ def monte_carlo():
 def main():
     #map_gen()
     #val, xs, ys = lev()
-    monte_carlo()
+    #monte_carlo()
     #graph(xs, ys)
 
-    # Gradient Approximation
-    #B_deriv = finite_diff(u, 1, np.array([[1, 0, 0]]), wl)
-    # L_deriv = finite_diff(u, 1, np.array([[0, 1, 0]]), wl)
-    # H_deriv = finite_diff(u, 1, np.array([[0, 0, 1]]), wl)
+    fe = get_f(5, 10)/(3*10**5)
+
+    # Test vectors for derivative approximation and verification
+    vec = np.array([[5], [10]])
+    u = np.array([[5, 10, 0]]).T
+
+    # Analytical df21/dx solution
+    df21x = (1/fe*(((s2d)/(np.linalg.norm(u-s2)))-(((u-s2).T @ s2d)*(u-s2))/((np.linalg.norm(u-s2))**3))
+    -(1/fe*(((s1d)/(np.linalg.norm(u-s1)))-(((u-s1).T @ s1d)*(u-s1))/((np.linalg.norm(u-s1))**3))))
+    
+    print("Analytical Derivatives:")
+    print(f"B: {df21x[0, 0]}")
+    print(f"L: {df21x[1, 0]}")
+    print(f"H: {df21x[2, 0]}")
+
+    # Finite Difference Approximation
+    B_deriv_fd = finite_diff(u, 10**(-8), np.array([[1, 0, 0]]), fe)
+    L_deriv_fd = finite_diff(u, 10**(-8), np.array([[0, 1, 0]]), fe)
+    H_deriv_fd = finite_diff(u, 10**(-8), np.array([[0, 0, 1]]), fe)
+
+    print("Finite Difference Derivatives:")
+    print(f"B: {B_deriv_fd}")
+    print(f"L: {L_deriv_fd}")
+    print(f"H: {H_deriv_fd}")
+
+    # Complex Step Approximation
+    B_deriv_cs = complex_step(u, 10**(-200), np.array([[1, 0, 0]]), fe)
+    L_deriv_cs = complex_step(u, 10**(-200), np.array([[0, 1, 0]]), fe)
+    H_deriv_cs = complex_step(u, 10**(-200), np.array([[0, 0, 1]]), fe)
+
+    print(f"Complex Step Derivatives:")
+    print(f"B: {B_deriv_cs}")
+    print(f"L: {L_deriv_cs}")
+    print(f"H: {H_deriv_cs}")
 
 main()  
