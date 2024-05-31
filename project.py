@@ -6,16 +6,19 @@ import time
 nVals = 401
 step = 0.1
 
+fs = 1*10**9      #frequency of transmitter
+w = (3*10**5)/fs #wave length 
+
 R0 = 6378.137
 e = 0.081819198425
 
 noise = 16
 
 #source location
-u0 = np.array([1, 1])
+u0 = np.array([[5], [10], [0]])
 
 #Data matrix
-theta = np.empty(shape = (501, 501)) 
+theta = np.empty(shape = (401, 401)) 
 
 #Weighting function
 Q = np.array([[2, 1, 1],
@@ -25,11 +28,13 @@ Q = np.array([[2, 1, 1],
 Qinv = np.linalg.inv(Q)
 
 #making the noise vector
-n1 = random.gauss(0, 16)
-n2 = random.gauss(0, 16)
-n3 = random.gauss(0, 16)
-n4 = random.gauss(0, 16)
-nf = np.array([[n2-n1], [n3-n1], [n4-n1]])
+def nf(lvl):
+    n1 = random.gauss(0, lvl)
+    n2 = random.gauss(0, lvl)
+    n3 = random.gauss(0, lvl)
+    n4 = random.gauss(0, lvl)
+    nf = np.array([[n2-n1], [n3-n1], [n4-n1]])
+    return nf
 
 #satalites
 s1 = np.array([[7378.1, 0, 0]]).T
@@ -54,7 +59,7 @@ def LLA_to_ECEF(lat, long):
     u = np.array([[x], [y], [z]])
     return u
 
-u0 = LLA_to_ECEF(u0[1],u0[1])[:2,0]
+u0 = LLA_to_ECEF(u0[0,0],u0[1,0])[:2]
 
 #grid search doppler shift
 def dopler_shift(lat, long, wl):
@@ -69,12 +74,12 @@ def dopler_shift(lat, long, wl):
 #estimate the transmitter frequency
 def get_f(lat, long):
     u = LLA_to_ECEF(lat, long)
-    f0 = ((u - s1).T @ s1d)/(np.linalg.norm(u-s1))
-    f1 = ((u - s2).T @ s2d)/(np.linalg.norm(u-s2))
-    f2 = ((u - s3).T @ s3d)/(np.linalg.norm(u-s3)) 
-    f3 = ((u - s4).T @ s4d)/(np.linalg.norm(u-s4))
-    fs = (f0+f1+f2+f3)/4
-    return fs
+    f0 = 1/w*np.dot((u - s1).T , s1d)/(np.linalg.norm(u-s1))+fs
+    f1 = 1/w*np.dot((u - s2).T , s2d)/(np.linalg.norm(u-s2))+fs
+    f2 = 1/w*np.dot((u - s3).T , s3d)/(np.linalg.norm(u-s3))+fs
+    f3 = 1/w*np.dot((u - s4).T , s4d)/(np.linalg.norm(u-s4))+fs
+    fe = (f0+f1+f2+f3)/4
+    return fe
 
 #grid search calc
 def map_gen():
@@ -82,21 +87,24 @@ def map_gen():
     lat  = 0
     min = float('inf')
     coord = 0
-    fe = get_f(1,1)/(3*10**8)
-    f = dopler_shift(1, 1, fe)
-    for i in range(0, 501):
-        for j in range(0, 501):
+    n = nf(1)
+    fe = (3*10**5)/get_f(1,1)
+
+    f = dopler_shift(5, 10, fe)
+    for i in range(0, 401):
+        for j in range(0, 401):
             g = dopler_shift(lat, long, fe)
-            g += nf
-            theta[j][i] = np.log((f - g).T @ Qinv @ (f - g))
+            g += n
+            theta[j][i] = np.log((f - (g)).T @ Qinv @ (f - (g)))
 
             if theta[j][i] < min: #grid search stuff
                 min = theta[j][i]
-                coord = np.array([[j], [i], [0]])*0.01
-            lat += 0.01
+                coord = np.array([[j], [i], [0]])*0.1
+            lat += 0.1
         lat = 0
-        long += 0.01
-    return coord[:2,0]
+        long += 0.1
+    xyz = LLA_to_ECEF(coord[0,0], coord[1,0])
+    return coord[:2], xyz[:2]
 
 def finite_diff(starting_pos, step_size, direction, wavelength):
     u = starting_pos #LLA_to_ECEF(starting_pos[0], starting_pos[1])
@@ -136,7 +144,7 @@ def pos_jac(lat, lon):
     return pos
 
 #Calculates the Jacobian and the residual for the LMA
-def get_jac(x, wl):
+def get_jac(x, wl,n):
     u = LLA_to_ECEF((x[0])[0], (x[1])[0])
     pos = pos_jac((x[0])[0], (x[1])[0])
     f21d = np.pi*(1/wl*(((s2d)/(np.linalg.norm(u-s2)))-(((u-s2).T @ s2d)*(u-s2))/((np.linalg.norm(u-s2))**3))
@@ -156,13 +164,13 @@ def get_jac(x, wl):
     lon  = (x[1])[0]
     y = dopler_shift(5, 10, wl)
     f = dopler_shift(lat, lon, wl)
-    r = y-f+nf
+    r = y-f+n
     return J, r
 
 #LMA algorithim
 def lev(coord):
     x0 = coord
-    fe = get_f(5, 10)/(3*10**5)
+    fe = (3*10**5)/get_f(5, 10)
     xs = np.empty(shape = (0))
     ys = np.empty(shape = (0))
     flag = 0
@@ -172,17 +180,19 @@ def lev(coord):
     x = x0
     mu = mu0
     delta = 1
-    j, r = get_jac(x, fe)
+    n = nf(1)
+    j, r = get_jac(x, fe, n)
     e = (np.linalg.norm(r))**2
     tol = 10**-3
     xs = np.append(xs, x[0])
     ys = np.append(ys, x[1])
     
+    
     while abs(delta) > tol:
         s = np.linalg.inv(j.T@Qinv@j+mu*np.diag(np.diag(j.T@Qinv@j)))@j.T@Qinv@r
         if k < 2:
             s /= 5
-        js, rs = get_jac(x+s, fe)
+        js, rs = get_jac(x+s, fe, n)
         es = (np.linalg.norm(rs))**2
         delta = es-e
         if delta < 0:
@@ -201,8 +211,9 @@ def lev(coord):
     if flag:
         print("not converged")
     else:
-        print(x, k)
-    return x[:2,0], xs, ys
+        print(x)
+    x = LLA_to_ECEF(x[0,0], x[1,0])
+    return x[:2], xs, ys
 
 #plotting stuff
 def graph(xs1, ys1, xs2, ys2, xs3, ys3):
@@ -223,7 +234,7 @@ def graph(xs1, ys1, xs2, ys2, xs3, ys3):
 
     plt.xlabel("Longitude (Degrees)")
     plt.ylabel("Latitude (Degrees)")
-    plt.title("FDOA plot")
+    plt.title("FDOA Plot With an Estimated frequency")
     #print("Minmum is found at: ", coord.T)
     #plt.annotate('Min',xy=(10,5),xytext=(5,10),arrowprops={})
     
@@ -234,62 +245,72 @@ def monte_carlo():
     sumation = 0
     L = 5
     for l in range(0, L):
-        val = map_gen()
-        #val, xs, ys = lev()
-        print(f"vald: {val}")
-        val = LLA_to_ECEF(val[0], val[1])[:2,0]
-        print(f"val: {val}")
-        print(f"u0: {u0}")
+        #val = map_gen()
+        val, xs, ys = lev(np.array([[20], [20]]))
         sumation += np.linalg.norm(val - u0)**2
         print(l)
         
     RMSE = np.sqrt((1/L)*sumation)
     print(f"RMSE for {noise}: {RMSE}")
 
+def multistart():
+    b = 2
+    i = 20
+    bd = b
+    phi = 0
+    out = np.empty(shape = (2, 30))
+    while i > 0:
+        a = i % b
+        out = np.append(out, phi + a/bd)
+        bd = bd*b
+        i = int(i/b)
+    return out
 def main():
     #map_gen()
-    # coord1 = np.array([[random.randint(0, 40)], [random.randint(0, 40)]])
-    # coord2 = np.array([[random.randint(0, 40)], [random.randint(0, 40)]])
-    # coord3 = np.array([[random.randint(0, 40)], [random.randint(0, 40)]])
-    # val1, xs1, ys1 = lev(coord1)
-    # val2, xs2, ys2 = lev(coord2)
-    # val3, xs3, ys3 = lev(coord3)
-    monte_carlo()
-    #graph(xs1, ys1, xs2, ys2, xs3, ys3)
-
-    fe = get_f(5, 10)/(3*10**5)
-
-    # Test vectors for derivative approximation and verification
-    vec = np.array([[5], [10]])
-    u = np.array([[5, 10, 0]]).T
-
-    # Analytical df21/dx solution
-    df21x = (1/fe*(((s2d)/(np.linalg.norm(u-s2)))-(((u-s2).T @ s2d)*(u-s2))/((np.linalg.norm(u-s2))**3))
-    -(1/fe*(((s1d)/(np.linalg.norm(u-s1)))-(((u-s1).T @ s1d)*(u-s1))/((np.linalg.norm(u-s1))**3))))
+    coord1 = np.array([[random.randint(0, 40)], [random.randint(0, 40)]])
+    coord2 = np.array([[random.randint(0, 40)], [random.randint(0, 40)]])
+    coord3 = np.array([[random.randint(0, 40)], [random.randint(0, 40)]])
+    val1, xs1, ys1 = lev(coord1)
+    val2, xs2, ys2 = lev(coord2)
+    val3, xs3, ys3 = lev(coord3)
+    graph(xs1, ys1, xs2, ys2, xs3, ys3)
+    #monte_carlo()
+    #print(multistart())
     
-    print("Analytical Derivatives:")
-    print(f"B: {df21x[0, 0]}")
-    print(f"L: {df21x[1, 0]}")
-    print(f"H: {df21x[2, 0]}")
 
-    # Finite Difference Approximation
-    B_deriv_fd = finite_diff(u, 10**(-8), np.array([[1, 0, 0]]), fe)
-    L_deriv_fd = finite_diff(u, 10**(-8), np.array([[0, 1, 0]]), fe)
-    H_deriv_fd = finite_diff(u, 10**(-8), np.array([[0, 0, 1]]), fe)
+    # fe = get_f(5, 10)/(3*10**5)
 
-    print("Finite Difference Derivatives:")
-    print(f"B: {B_deriv_fd}")
-    print(f"L: {L_deriv_fd}")
-    print(f"H: {H_deriv_fd}")
+    # # Test vectors for derivative approximation and verification
+    # vec = np.array([[5], [10]])
+    # u = np.array([[5, 10, 0]]).T
 
-    # Complex Step Approximation
-    B_deriv_cs = complex_step(u, 10**(-200), np.array([[1, 0, 0]]), fe)
-    L_deriv_cs = complex_step(u, 10**(-200), np.array([[0, 1, 0]]), fe)
-    H_deriv_cs = complex_step(u, 10**(-200), np.array([[0, 0, 1]]), fe)
+    # # Analytical df21/dx solution
+    # df21x = (1/fe*(((s2d)/(np.linalg.norm(u-s2)))-(((u-s2).T @ s2d)*(u-s2))/((np.linalg.norm(u-s2))**3))
+    # -(1/fe*(((s1d)/(np.linalg.norm(u-s1)))-(((u-s1).T @ s1d)*(u-s1))/((np.linalg.norm(u-s1))**3))))
+    
+    # print("Analytical Derivatives:")
+    # print(f"B: {df21x[0, 0]}")
+    # print(f"L: {df21x[1, 0]}")
+    # print(f"H: {df21x[2, 0]}")
 
-    print(f"Complex Step Derivatives:")
-    print(f"B: {B_deriv_cs}")
-    print(f"L: {L_deriv_cs}")
-    print(f"H: {H_deriv_cs}")
+    # # Finite Difference Approximation
+    # B_deriv_fd = finite_diff(u, 10**(-8), np.array([[1, 0, 0]]), fe)
+    # L_deriv_fd = finite_diff(u, 10**(-8), np.array([[0, 1, 0]]), fe)
+    # H_deriv_fd = finite_diff(u, 10**(-8), np.array([[0, 0, 1]]), fe)
+
+    # print("Finite Difference Derivatives:")
+    # print(f"B: {B_deriv_fd}")
+    # print(f"L: {L_deriv_fd}")
+    # print(f"H: {H_deriv_fd}")
+
+    # # Complex Step Approximation
+    # B_deriv_cs = complex_step(u, 10**(-200), np.array([[1, 0, 0]]), fe)
+    # L_deriv_cs = complex_step(u, 10**(-200), np.array([[0, 1, 0]]), fe)
+    # H_deriv_cs = complex_step(u, 10**(-200), np.array([[0, 0, 1]]), fe)
+
+    # print(f"Complex Step Derivatives:")
+    # print(f"B: {B_deriv_cs}")
+    # print(f"L: {L_deriv_cs}")
+    # print(f"H: {H_deriv_cs}")
 
 main()  
