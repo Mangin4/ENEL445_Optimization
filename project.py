@@ -164,7 +164,7 @@ def get_jac(x, wl,n):
     lon  = (x[1])[0]
     y = dopler_shift(5, 10, wl)
     f = dopler_shift(lat, lon, wl)
-    r = y-f+n
+    r = y-(f+n)
     return J, r
 
 #LMA algorithim
@@ -173,6 +173,7 @@ def lev(coord):
     fe = (3*10**5)/get_f(5, 10)
     xs = np.empty(shape = (0))
     ys = np.empty(shape = (0))
+    er = np.empty(shape = (0))
     flag = 0
     mu0 = 0.1
     ro = 2
@@ -180,13 +181,12 @@ def lev(coord):
     x = x0
     mu = mu0
     delta = 1
-    n = nf(1)
+    n = nf(16)
     j, r = get_jac(x, fe, n)
     e = (np.linalg.norm(r))**2
-    tol = 10**-3
+    tol = 10**-6
     xs = np.append(xs, x[0])
     ys = np.append(ys, x[1])
-    
     
     while abs(delta) > tol:
         s = np.linalg.inv(j.T@Qinv@j+mu*np.diag(np.diag(j.T@Qinv@j)))@j.T@Qinv@r
@@ -207,16 +207,17 @@ def lev(coord):
         if x[0] < 0 or x[0] > 40 or x[1] < 0 or x[1] > 40:
             flag = 1
             break
+        er = np.append(er, delta)
         k+=1
     if flag:
         print("not converged")
     else:
         print(x)
     x = LLA_to_ECEF(x[0,0], x[1,0])
-    return x[:2], xs, ys
+    return x[:2], xs, ys, k, abs(er)
 
 #plotting stuff
-def graph(xs1, ys1, xs2, ys2, xs3, ys3):
+def graph(xs1, ys1, xs2, ys2, xs3, ys3,xs4, ys4,xs5, ys5,xs6, ys6):
     coord, min = map_gen()
     tmin = np.min(theta)
     tmax = np.max(theta)
@@ -229,6 +230,9 @@ def graph(xs1, ys1, xs2, ys2, xs3, ys3):
     xpath = plt.plot(ys1, xs1) 
     xpath = plt.plot(ys2, xs2) 
     xpath = plt.plot(ys3, xs3) 
+    xpath = plt.plot(ys4, xs4) 
+    xpath = plt.plot(ys5, xs5) 
+    xpath = plt.plot(ys6, xs6) 
 
     plt.colorbar(contour, label='theta-values')
 
@@ -243,7 +247,7 @@ def graph(xs1, ys1, xs2, ys2, xs3, ys3):
 #monte carlo simulation to find the accuracy of the data
 def monte_carlo():
     sumation = 0
-    L = 5
+    L = 10**4
     for l in range(0, L):
         #val = map_gen()
         val, xs, ys = lev(np.array([[20], [20]]))
@@ -258,22 +262,36 @@ def multistart():
     i = 20
     bd = b
     phi = 0
-    out = np.empty(shape = (2, 30))
+    max_phi = 40
+    min_phi = 0
+    scale_factor = (max_phi - min_phi)
+    out = np.empty(shape=(2, 30))
     while i > 0:
         a = i % b
-        out = np.append(out, phi + a/bd)
-        bd = bd*b
-        i = int(i/b)
+        phi = (phi + a / bd) * scale_factor
+        out = np.append(out, phi)
+        bd = bd * b
+        i = int(i / b)
     return out
+
+
+
 def main():
+    start = np.random.uniform([0,0], [40,40], size = 2)
     #map_gen()
     coord1 = np.array([[random.randint(0, 40)], [random.randint(0, 40)]])
     coord2 = np.array([[random.randint(0, 40)], [random.randint(0, 40)]])
     coord3 = np.array([[random.randint(0, 40)], [random.randint(0, 40)]])
-    val1, xs1, ys1 = lev(coord1)
-    val2, xs2, ys2 = lev(coord2)
-    val3, xs3, ys3 = lev(coord3)
-    graph(xs1, ys1, xs2, ys2, xs3, ys3)
+    coord4 = np.array([[random.randint(0, 40)], [random.randint(0, 40)]])
+    coord5 = np.array([[random.randint(0, 40)], [random.randint(0, 40)]])
+    coord6 = np.array([[random.randint(0, 40)], [random.randint(0, 40)]])
+    val1, xs1, ys1, k1, er1 = lev(coord1)
+    val2, xs2, ys2, k2, er2 = lev(coord2)
+    val3, xs3, ys3, k3, er3 = lev(coord3)
+    val4, xs4, ys4, k4, er4 = lev(coord4)
+    val5, xs5, ys5, k5, er5 = lev(coord5)
+    val6, xs6, ys6, k5, er6 = lev(coord6)
+    graph(xs1, ys1, xs2, ys2, xs3, ys3,xs4, ys4,xs5, ys5,xs6, ys6)
     #monte_carlo()
     #print(multistart())
     
